@@ -1,11 +1,11 @@
 
-import { AppState, BankAccount, Transaction, User } from '../types';
+import { AppState, BankAccount, Transaction } from '../types';
 import { INITIAL_ACCOUNTS, INITIAL_TRANSACTIONS, DEFAULT_CATEGORIES } from '../constants';
+import { db, auth } from './firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-const LOCAL_STORAGE_KEY = 'finance_wise_state';
+const LOCAL_STORAGE_KEY = 'finance_wise_state_demo';
 
-// In a real application, you'd use Firebase SDK here
-// Since we don't have the user's config, we provide the structure
 class DatabaseService {
   private isFormalMode: boolean = false;
 
@@ -14,26 +14,39 @@ class DatabaseService {
   }
 
   async saveState(state: AppState): Promise<void> {
-    if (!this.isFormalMode) {
+    if (!this.isFormalMode || !db || !auth?.currentUser) {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
-    } else {
-      // Logic for Firebase Firestore would go here
-      // await setDoc(doc(db, "users", state.currentUser.id), state);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state)); // Fallback
+      return;
+    }
+
+    try {
+      const userRef = doc(db, "users", auth.currentUser.uid);
+      await setDoc(userRef, {
+        accounts: state.accounts,
+        transactions: state.transactions,
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (e) {
+      console.error("Failed to save to Firebase:", e);
     }
   }
 
-  async loadState(): Promise<AppState | null> {
-    if (!this.isFormalMode) {
+  async loadState(): Promise<Partial<AppState> | null> {
+    if (!this.isFormalMode || !db || !auth?.currentUser) {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-      return null;
-    } else {
-      // Logic for Firebase would go here
-      // const docRef = doc(db, "users", auth.currentUser.uid);
-      // const docSnap = await getDoc(docRef);
-      return null;
+      return saved ? JSON.parse(saved) : null;
     }
+
+    try {
+      const userRef = doc(db, "users", auth.currentUser.uid);
+      const docSnap = await getDoc(userRef);
+      if (docSnap.exists()) {
+        return docSnap.data() as Partial<AppState>;
+      }
+    } catch (e) {
+      console.error("Failed to load from Firebase:", e);
+    }
+    return null;
   }
 
   getInitialState(): AppState {

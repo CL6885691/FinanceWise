@@ -7,9 +7,13 @@ export const getFinancialAdvice = async (
   categories: Category[],
   accounts: BankAccount[]
 ) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    return "API KEY 未設定，請檢查環境變數。";
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
-  // Prepare data summary for the AI
   const totalIncome = transactions
     .filter(t => t.type === TransactionType.INCOME)
     .reduce((sum, t) => sum + t.amount, 0);
@@ -29,33 +33,31 @@ export const getFinancialAdvice = async (
     .filter(item => item.amount > 0);
 
   const prompt = `
-    你是一位專業的個人理財顧問。請根據以下財務狀況給予具體、客觀且友善的建議。
+    你是一位世界級的高級理財專家。請針對以下真實財務數據進行深度的邏輯分析。
     
-    當前資產概況：
-    - 總帳戶餘額：$${accounts.reduce((sum, acc) => sum + acc.balance, 0)}
+    數據摘要：
+    - 當前總資產：$${accounts.reduce((sum, acc) => sum + acc.balance, 0)}
     - 本期總收入：$${totalIncome}
     - 本期總支出：$${totalExpense}
-    - 結餘：$${totalIncome - totalExpense}
+    - 儲蓄率：${totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : 0}%
     
-    支出細分：
+    支出明細：
     ${expenseByCategory.map(e => `- ${e.name}: $${e.amount}`).join('\n')}
     
-    請以 Markdown 格式回應，包含以下三個章節：
-    1. 財務現況分析：分析收支比與資金運用效率。
-    2. 優化建議：找出支出過高的部分或可以改進的理財習慣。
-    3. 行動指南：給予 2-3 個具體的下一步行動。
-    
-    語言請使用繁體中文。
+    請以專業、嚴謹且具有前瞻性的口吻提供 Markdown 報告：
+    1. 【財務健康度評估】：分析資產流動性與收支結構。
+    2. 【潛在風險與痛點】：識別不必要的支出或通膨影響。
+    3. 【策略性行動計畫】：給予具體的理財策略（如 50/30/20 法則應用）。
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
     });
     return response.text;
   } catch (error) {
-    console.error("AI Advice Error:", error);
-    return "抱歉，目前無法產生 AI 建議。請稍後再試。";
+    console.error("Gemini Pro Error:", error);
+    return "AI 思考時發生錯誤，請稍後再試。";
   }
 };
