@@ -1,6 +1,8 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { Transaction, Category, BankAccount, TransactionType } from "../types";
+import { Transaction, Category, BankAccount, TransactionType, User } from "../types";
+
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getFinancialAdvice = async (
   transactions: Transaction[],
@@ -8,49 +10,44 @@ export const getFinancialAdvice = async (
   accounts: BankAccount[]
 ) => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.warn("Gemini API Key is missing. Returning placeholder advice.");
-    return "系統偵測到未設定 API Key。請在 GitHub Secrets 中配置 API_KEY 以啟用完整 AI 功能。";
-  }
+  if (!apiKey) return "請配置 API_KEY 以啟用 AI 功能。";
 
-  const ai = new GoogleGenAI({ apiKey });
-  
-  const totalIncome = transactions
-    .filter(t => t.type === TransactionType.INCOME)
-    .reduce((sum, t) => sum + t.amount, 0);
-    
-  const totalExpense = transactions
-    .filter(t => t.type === TransactionType.EXPENSE)
-    .reduce((sum, t) => sum + t.amount, 0);
-    
-  const expenseByCategory = categories
-    .filter(c => c.type === TransactionType.EXPENSE)
-    .map(cat => {
-      const amount = transactions
-        .filter(t => t.categoryId === cat.id)
-        .reduce((sum, t) => sum + t.amount, 0);
-      return { name: cat.name, amount };
-    })
+  const totalIncome = transactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === TransactionType.EXPENSE).reduce((sum, t) => sum + t.amount, 0);
+  const expenseByCategory = categories.filter(c => c.type === TransactionType.EXPENSE)
+    .map(cat => ({ name: cat.name, amount: transactions.filter(t => t.categoryId === cat.id).reduce((sum, t) => sum + t.amount, 0) }))
     .filter(item => item.amount > 0);
 
+  const prompt = `你是一位高級理財專家。請針對數據分析：總資產$${accounts.reduce((sum, acc) => sum + acc.balance, 0)}, 收入$${totalIncome}, 支出$${totalExpense}。支出細項：${expenseByCategory.map(e => `${e.name}:$${e.amount}`).join(', ')}。請提供 Markdown 報告：1.【財務健康度】 2.【消費習慣診斷】 3.【具體行動建議】。使用繁體中文。`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: prompt,
+    });
+    return response.text;
+  } catch (error) {
+    return "分析失敗，請檢查 API 設定。";
+  }
+};
+
+export const getFortuneAdvice = async (user: User, totalBalance: number) => {
+  if (!user.birthday || !user.zodiac) return "請先設定您的生日資訊。";
+
   const prompt = `
-    你是一位世界級的高級理財專家。請針對以下真實財務數據進行深度的邏輯分析與前瞻性建議。
+    你是一位融合了「現代財務規劃」與「東方玄學/西方占星」的跨界理財大師。
+    使用者資料：
+    - 姓名：${user.name}
+    - 星座：${user.zodiac}
+    - 生肖：${user.chineseZodiac}
+    - 目前總資產：$${totalBalance.toLocaleString()}
     
-    數據摘要：
-    - 當前總帳戶餘額：$${accounts.reduce((sum, acc) => sum + acc.balance, 0)}
-    - 本期總收入：$${totalIncome}
-    - 本期總支出：$${totalExpense}
-    - 儲蓄率：${totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : 0}%
+    請根據該使用者的星座特質與生肖流年，結合其資產狀況，提供一份「財富運勢占卜報告」：
+    1. 【星象財運解析】：以星座角度分析其近期的偏財運與理財盲點。
+    2. 【生肖流年指引】：以生肖流年角度分析其事業財富的最佳切入點。
+    3. 【開運理財策略】：給予 3 個融合玄學與科學的轉運理財建議（例如：錢包顏色、投資類型、幸運方位）。
     
-    支出結構明細：
-    ${expenseByCategory.map(e => `- ${e.name}: $${e.amount}`).join('\n')}
-    
-    請以專業、權威且友善的口吻提供 Markdown 格式的財務診斷報告：
-    1. 【財務健康度評估】：分析目前的收支比、儲蓄率及資產配置合理性。
-    2. 【消費習慣診斷】：找出可能存在浪費的項目，或需要優化的支出分類。
-    3. 【具體行動指引】：給予 3 個立即可執行的理財建議（例如：如何達成 50/30/20 法則）。
-    
-    語言請使用繁體中文。
+    報告請使用神祕、專業且具備親和力的口吻，格式為 Markdown，繁體中文。
   `;
 
   try {
@@ -60,7 +57,6 @@ export const getFinancialAdvice = async (
     });
     return response.text;
   } catch (error) {
-    console.error("Gemini Pro API Error:", error);
-    return "AI 在分析數據時遇到了技術問題。請確保您的 API Key 有效且具備存取權限。";
+    return "占卜球目前一片模糊...請稍後再試。";
   }
 };
