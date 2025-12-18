@@ -9,7 +9,8 @@ export const getFinancialAdvice = async (
 ) => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    return "API KEY 未設定，請檢查環境變數。";
+    console.warn("Gemini API Key is missing. Returning placeholder advice.");
+    return "系統偵測到未設定 API Key。請在 GitHub Secrets 中配置 API_KEY 以啟用完整 AI 功能。";
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -33,21 +34,23 @@ export const getFinancialAdvice = async (
     .filter(item => item.amount > 0);
 
   const prompt = `
-    你是一位世界級的高級理財專家。請針對以下真實財務數據進行深度的邏輯分析。
+    你是一位世界級的高級理財專家。請針對以下真實財務數據進行深度的邏輯分析與前瞻性建議。
     
     數據摘要：
-    - 當前總資產：$${accounts.reduce((sum, acc) => sum + acc.balance, 0)}
+    - 當前總帳戶餘額：$${accounts.reduce((sum, acc) => sum + acc.balance, 0)}
     - 本期總收入：$${totalIncome}
     - 本期總支出：$${totalExpense}
     - 儲蓄率：${totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : 0}%
     
-    支出明細：
+    支出結構明細：
     ${expenseByCategory.map(e => `- ${e.name}: $${e.amount}`).join('\n')}
     
-    請以專業、嚴謹且具有前瞻性的口吻提供 Markdown 報告：
-    1. 【財務健康度評估】：分析資產流動性與收支結構。
-    2. 【潛在風險與痛點】：識別不必要的支出或通膨影響。
-    3. 【策略性行動計畫】：給予具體的理財策略（如 50/30/20 法則應用）。
+    請以專業、權威且友善的口吻提供 Markdown 格式的財務診斷報告：
+    1. 【財務健康度評估】：分析目前的收支比、儲蓄率及資產配置合理性。
+    2. 【消費習慣診斷】：找出可能存在浪費的項目，或需要優化的支出分類。
+    3. 【具體行動指引】：給予 3 個立即可執行的理財建議（例如：如何達成 50/30/20 法則）。
+    
+    語言請使用繁體中文。
   `;
 
   try {
@@ -57,7 +60,7 @@ export const getFinancialAdvice = async (
     });
     return response.text;
   } catch (error) {
-    console.error("Gemini Pro Error:", error);
-    return "AI 思考時發生錯誤，請稍後再試。";
+    console.error("Gemini Pro API Error:", error);
+    return "AI 在分析數據時遇到了技術問題。請確保您的 API Key 有效且具備存取權限。";
   }
 };

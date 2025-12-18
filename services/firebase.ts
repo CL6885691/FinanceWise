@@ -16,9 +16,13 @@ if (configStr) {
       app = initializeApp(firebaseConfig);
       auth = getAuth(app);
       db = getFirestore(app);
+    } else {
+      app = getApps()[0];
+      auth = getAuth(app);
+      db = getFirestore(app);
     }
   } catch (e) {
-    console.error("Firebase initialization failed:", e);
+    console.error("Firebase initialization failed. Falling back to local/demo mode.", e);
   }
 }
 

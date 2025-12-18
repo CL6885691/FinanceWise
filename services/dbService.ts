@@ -14,6 +14,7 @@ class DatabaseService {
   }
 
   async saveState(state: AppState): Promise<void> {
+    // If not in formal mode or Firebase isn't initialized, save to LocalStorage
     if (!this.isFormalMode || !db || !auth?.currentUser) {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
       return;
@@ -25,9 +26,9 @@ class DatabaseService {
         accounts: state.accounts,
         transactions: state.transactions,
         lastUpdated: new Date().toISOString()
-      });
+      }, { merge: true });
     } catch (e) {
-      console.error("Failed to save to Firebase:", e);
+      console.error("Failed to save to Firebase Firestore:", e);
     }
   }
 
@@ -41,10 +42,14 @@ class DatabaseService {
       const userRef = doc(db, "users", auth.currentUser.uid);
       const docSnap = await getDoc(userRef);
       if (docSnap.exists()) {
-        return docSnap.data() as Partial<AppState>;
+        const data = docSnap.data();
+        return {
+          accounts: data.accounts || [],
+          transactions: data.transactions || []
+        };
       }
     } catch (e) {
-      console.error("Failed to load from Firebase:", e);
+      console.error("Failed to load from Firebase Firestore:", e);
     }
     return null;
   }
