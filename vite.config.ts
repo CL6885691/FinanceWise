@@ -4,17 +4,17 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: './', // 關鍵：確保 GitHub Pages 子目錄路徑正確，避免白屏
+  base: './', 
   define: {
-    // 注入環境變數，讓程式碼中可以透過 process.env 存取
-    'process.env.API_KEY': JSON.stringify(process.env.API_KEY),
-    'process.env.FIREBASE_CONFIG': JSON.stringify(process.env.FIREBASE_CONFIG)
+    // 使用 JSON.stringify 並提供預設值，防止變數未定義時產生的 syntax error
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || ""),
+    'process.env.FIREBASE_CONFIG': JSON.stringify(process.env.FIREBASE_CONFIG || "")
   },
   build: {
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: false, // 開發初期保留 console 以便除錯
+        drop_console: false,
         drop_debugger: true
       }
     },
