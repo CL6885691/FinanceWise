@@ -2,16 +2,14 @@
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, Category, BankAccount, TransactionType, User } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+// Always create a new GoogleGenAI instance right before making an API call to ensure it uses the most up-to-date API key.
 export const getFinancialAdvice = async (
   transactions: Transaction[],
   categories: Category[],
   accounts: BankAccount[]
 ) => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "") return "請配置 API_KEY 以啟用 AI 功能。";
-
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const totalIncome = transactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + t.amount, 0);
   const totalExpense = transactions.filter(t => t.type === TransactionType.EXPENSE).reduce((sum, t) => sum + t.amount, 0);
   const expenseByCategory = categories.filter(c => c.type === TransactionType.EXPENSE)
@@ -38,12 +36,15 @@ export const getFinancialAdvice = async (
     return response.text || "分析結果為空。";
   } catch (error: any) {
     console.error("AI Error:", error);
-    return `分析失敗：${error.message || "請檢查 API 設定或稍後再試。"}`;
+    return `分析失敗：${error.message || "請稍後再試。"}`;
   }
 };
 
 export const getFortuneAdvice = async (user: User, totalBalance: number) => {
   if (!user.birthday || !user.zodiac) return "請先設定您的生日資訊以開啟算命功能。";
+
+  // Always create a new GoogleGenAI instance right before making an API call.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const prompt = `
     你是一位理財大師，專長是結合現代金流分析與東西方占星。
@@ -67,6 +68,6 @@ export const getFortuneAdvice = async (user: User, totalBalance: number) => {
     return response.text || "占卜球無法顯示訊息。";
   } catch (error: any) {
     console.error("Fortune AI Error:", error);
-    return "占卜球目前一片模糊...可能是因為星象不穩，請確認 API Key 是否有效。";
+    return "占卜球目前一片模糊...可能是因為星象不穩，請確認環境設定。";
   }
 };

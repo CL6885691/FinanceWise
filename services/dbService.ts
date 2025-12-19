@@ -4,7 +4,7 @@ import { INITIAL_ACCOUNTS, INITIAL_TRANSACTIONS, DEFAULT_CATEGORIES } from '../c
 import { db, auth } from './firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-const LOCAL_STORAGE_KEY = 'finance_wise_state_v2';
+const LOCAL_STORAGE_KEY = 'finance_wise_v3_storage';
 
 class DatabaseService {
   private isFormalMode: boolean = false;
@@ -14,7 +14,7 @@ class DatabaseService {
   }
 
   async saveState(state: AppState): Promise<void> {
-    // 儲存至本地作為備份或展示模式
+    // 同步到 LocalStorage
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
       accounts: state.accounts,
       transactions: state.transactions,
@@ -28,35 +28,36 @@ class DatabaseService {
       await setDoc(userRef, {
         accounts: state.accounts,
         transactions: state.transactions,
-        userProfile: state.currentUser,
+        currentUser: state.currentUser,
         lastUpdated: new Date().toISOString()
       }, { merge: true });
     } catch (e) {
-      console.error("Failed to save to Firebase Firestore:", e);
+      console.error("Firebase Save Error:", e);
     }
   }
 
   async loadState(): Promise<Partial<AppState> | null> {
-    if (!this.isFormalMode || !db || !auth?.currentUser) {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
-    }
+    // 優先嘗試從 LocalStorage 加載以提升速度
+    const localData = localStorage.getItem(LOCAL_STORAGE_KEY);
+    let initialData = localData ? JSON.parse(localData) : null;
 
-    try {
-      const userRef = doc(db, "users", auth.currentUser.uid);
-      const docSnap = await getDoc(userRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        return {
-          accounts: data.accounts || [],
-          transactions: data.transactions || [],
-          currentUser: data.userProfile || null
-        };
+    if (this.isFormalMode && db && auth?.currentUser) {
+      try {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const docSnap = await getDoc(userRef);
+        if (docSnap.exists()) {
+          const remoteData = docSnap.data();
+          return {
+            accounts: remoteData.accounts || [],
+            transactions: remoteData.transactions || [],
+            currentUser: remoteData.currentUser || null
+          };
+        }
+      } catch (e) {
+        console.error("Firebase Load Error:", e);
       }
-    } catch (e) {
-      console.error("Failed to load from Firebase Firestore:", e);
     }
-    return null;
+    return initialData;
   }
 
   getInitialState(): AppState {

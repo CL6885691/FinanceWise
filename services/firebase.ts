@@ -1,11 +1,12 @@
 
-import { initializeApp, getApps, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { initializeApp, getApps } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
-let app: FirebaseApp | null = null;
-let auth: Auth | null = null;
-let db: Firestore | null = null;
+// Use any for complex types to avoid issues with inconsistent type definitions in the environment
+let app: any = null;
+let auth: any = null;
+let db: any = null;
 
 /**
  * 💡 已填入您的 Firebase 配置資料

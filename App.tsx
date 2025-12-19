@@ -4,7 +4,8 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import { dbService } from './services/dbService';
 import { auth } from './services/firebase';
-import { onAuthStateChanged, User as FirebaseUser, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+// Fix: Removed User as FirebaseUser import which was causing errors
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { AppState, Transaction, BankAccount, TransactionType, FinancialRiskProfile } from './types';
 import { getFinancialAdvice, getFortuneAdvice } from './services/geminiService';
 
@@ -59,7 +60,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+    // Fix: Type firebaseUser as any to bypass the missing User export error
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: any) => {
       if (firebaseUser) {
         dbService.setMode(true);
         const savedData = await dbService.loadState();
@@ -94,7 +96,7 @@ const App: React.FC = () => {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       }
     } catch (err: any) {
-      setAuthError(err.message || '認證失敗，請檢查資料。');
+      setAuthError(err.message || '認證失敗');
     } finally {
       setIsAuthLoading(false);
     }
@@ -102,6 +104,7 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     auth?.signOut();
+    localStorage.clear();
     setState(dbService.getInitialState());
     setActiveTab('dashboard');
   };
@@ -122,7 +125,7 @@ const App: React.FC = () => {
     const newState = { ...state, currentUser: updatedUser };
     setState(newState);
     await dbService.saveState(newState);
-    alert('個人理財命盤已更新！');
+    alert('命理資訊已更新！');
   };
 
   const fetchAiAdvice = async () => {
@@ -131,7 +134,7 @@ const App: React.FC = () => {
       const advice = await getFinancialAdvice(state.transactions, state.categories, state.accounts);
       setAiAdvice(advice);
     } catch (e) {
-      setAiAdvice("診斷失敗，請確認網路連線或 API Key 設定。");
+      setAiAdvice("診斷失敗，請稍後再試。");
     } finally {
       setIsAiLoading(false);
     }
@@ -139,7 +142,7 @@ const App: React.FC = () => {
 
   const fetchFortune = async () => {
     if (!state.currentUser?.birthday) {
-      alert('請先在下方設定您的生日資訊。');
+      alert('請先在下方輸入生日。');
       return;
     }
     setIsFortuneLoading(true);
@@ -148,7 +151,7 @@ const App: React.FC = () => {
       const advice = await getFortuneAdvice(state.currentUser, total);
       setFortuneAdvice(advice);
     } catch (e) {
-      setFortuneAdvice("命理大師目前休息中...請稍後再試。");
+      setFortuneAdvice("占星失敗，請稍後再試。");
     } finally {
       setIsFortuneLoading(false);
     }
@@ -198,97 +201,83 @@ const App: React.FC = () => {
   };
 
   const deleteAccount = async (id: string) => {
-    if (!confirm('確定刪除？這將會影響資產總計。')) return;
+    if (!confirm('確定刪除？')) return;
     const newState = { ...state, accounts: state.accounts.filter(a => a.id !== id) };
     setState(newState);
     await dbService.saveState(newState);
   };
 
-  if (!state.isLoggedIn) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-10 text-center animate-fadeIn">
-        <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 text-white text-3xl shadow-xl">
-          <i className="fa-solid fa-wallet"></i>
-        </div>
-        <h2 className="text-3xl font-black text-slate-800 mb-2">FinanceWise</h2>
-        <p className="text-slate-400 mb-8 font-bold text-sm">您的個人 AI 財務管家</p>
-        
-        <form onSubmit={handleAuthAction} className="space-y-4 mb-6 text-left">
-          {isRegisterMode && (
-             <div>
-               <label className="text-xs font-black text-slate-400 uppercase ml-1">稱呼</label>
-               <input type="text" required value={authName} onChange={e => setAuthName(e.target.value)} className="w-full px-5 py-3 rounded-xl border mt-1" placeholder="您的姓名" />
-             </div>
-          )}
-          <div>
-            <label className="text-xs font-black text-slate-400 uppercase ml-1">電子郵件</label>
-            <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full px-5 py-3 rounded-xl border mt-1" placeholder="example@mail.com" />
-          </div>
-          <div>
-            <label className="text-xs font-black text-slate-400 uppercase ml-1">密碼</label>
-            <input type="password" required value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="w-full px-5 py-3 rounded-xl border mt-1" placeholder="••••••••" />
+  if (!state.isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-10 animate-fadeIn">
+          <div className="text-center mb-8">
+            <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white text-3xl shadow-xl">
+              <i className="fa-solid fa-wallet"></i>
+            </div>
+            <h2 className="text-3xl font-black text-slate-800">FinanceWise</h2>
+            <p className="text-slate-400 font-bold">登入以管理您的個人財務</p>
           </div>
           
-          {authError && <p className="text-rose-500 text-xs font-bold px-1">{authError}</p>}
-          
-          <button type="submit" disabled={isAuthLoading} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center">
-            {isAuthLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : (isRegisterMode ? '立即註冊' : '登入系統')}
-          </button>
-        </form>
-
-        <div className="flex flex-col space-y-3">
-          <button onClick={() => setIsRegisterMode(!isRegisterMode)} className="text-blue-600 text-sm font-bold hover:underline">
-            {isRegisterMode ? '已經有帳號？點此登入' : '還沒有帳號？點此註冊'}
-          </button>
-          <div className="relative py-2">
-            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100"></span></div>
-            <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-400 font-bold">或</span></div>
+          <form onSubmit={handleAuthAction} className="space-y-4">
+            {isRegisterMode && (
+              <input type="text" required value={authName} onChange={e => setAuthName(e.target.value)} className="w-full px-5 py-3 rounded-xl border" placeholder="您的稱呼" />
+            )}
+            <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full px-5 py-3 rounded-xl border" placeholder="電子郵件" />
+            <input type="password" required value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="w-full px-5 py-3 rounded-xl border" placeholder="密碼" />
+            {authError && <p className="text-rose-500 text-xs font-bold">{authError}</p>}
+            <button type="submit" disabled={isAuthLoading} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black hover:bg-blue-700 transition-all">
+              {isAuthLoading ? '處理中...' : (isRegisterMode ? '建立帳號' : '登入')}
+            </button>
+          </form>
+          <div className="mt-6 text-center">
+            <button onClick={() => setIsRegisterMode(!isRegisterMode)} className="text-blue-600 text-sm font-bold">
+              {isRegisterMode ? '已有帳號？登入' : '還沒有帳號？註冊'}
+            </button>
+            <div className="my-4 border-t border-slate-100 pt-4">
+               <button onClick={() => setState(prev => ({ ...prev, isLoggedIn: true, currentUser: { id: 'demo', email: 'demo@test.com', name: '體驗用戶' } }))} className="text-slate-400 text-sm font-bold">以訪客模式繼續</button>
+            </div>
           </div>
-          <button onClick={() => setState(prev => ({ ...prev, isLoggedIn: true, currentUser: { id: 'demo', email: 'demo@test.com', name: '體驗用戶' } }))} className="w-full bg-slate-100 text-slate-600 py-4 rounded-xl font-black hover:bg-slate-200 transition-all">
-            以訪客身分體驗
-          </button>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} isDemoMode={state.isDemoMode} onToggleMode={() => {}} />
-      
       <main className="flex-1 p-10 overflow-y-auto max-h-screen">
         <header className="mb-10 flex justify-between items-end">
           <div>
             <h2 className="text-3xl font-black text-slate-900">
-              {activeTab === 'dashboard' ? '財務看板' : activeTab === 'accounts' ? '帳戶管理' : activeTab === 'transactions' ? '財務紀錄' : activeTab === 'fortune' ? '運勢與風險' : 'AI 診斷'}
+              {activeTab === 'dashboard' ? '財務看板' : activeTab === 'accounts' ? '帳戶管理' : activeTab === 'transactions' ? '財務紀錄' : activeTab === 'fortune' ? '運勢與風險' : 'AI 理財建議'}
             </h2>
-            <p className="text-slate-400 font-bold mt-1">掌握每一分錢的流向</p>
           </div>
-          <div className="bg-white px-4 py-2 rounded-2xl border border-slate-100 flex items-center space-x-3 shadow-sm">
-            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs"><i className="fa-solid fa-user"></i></div>
+          <div className="bg-white px-4 py-2 rounded-2xl border flex items-center space-x-3 shadow-sm">
+            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i className="fa-solid fa-user"></i></div>
             <span className="text-sm font-black text-slate-700">{state.currentUser?.name}</span>
           </div>
         </header>
 
         {activeTab === 'dashboard' && <Dashboard state={state} />}
-        
+
         {activeTab === 'accounts' && (
-          <div className="space-y-10 animate-fadeIn">
+          <div className="space-y-8 animate-fadeIn">
             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
-              <h3 className="text-lg font-black mb-6 flex items-center"><i className="fa-solid fa-plus-circle mr-2 text-blue-500"></i>新增資產帳戶</h3>
+              <h3 className="text-lg font-black mb-6">新增資產帳戶</h3>
               <form className="grid grid-cols-1 md:grid-cols-4 gap-4" onSubmit={handleAddAccount}>
-                <input type="text" name="name" required placeholder="帳戶名稱" className="px-5 py-3 rounded-xl border" />
+                <input type="text" name="name" required placeholder="帳戶名稱 (如: 薪資戶)" className="px-5 py-3 rounded-xl border" />
                 <input type="text" name="bankName" required placeholder="銀行名稱" className="px-5 py-3 rounded-xl border" />
-                <input type="number" name="balance" required placeholder="當前餘額" className="px-5 py-3 rounded-xl border" />
-                <button type="submit" className="bg-slate-900 text-white font-black rounded-xl hover:bg-black transition-all">新增帳戶</button>
+                <input type="number" name="balance" required placeholder="餘額" className="px-5 py-3 rounded-xl border" />
+                <button type="submit" className="bg-slate-900 text-white font-black rounded-xl py-3">新增帳戶</button>
               </form>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {state.accounts.map(acc => (
-                <div key={acc.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 group">
-                  <div className="flex justify-between mb-6">
-                    <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xl shadow-lg"><i className="fa-solid fa-building-columns"></i></div>
-                    <button onClick={() => deleteAccount(acc.id)} className="text-slate-200 hover:text-rose-500"><i className="fa-solid fa-trash"></i></button>
+                <div key={acc.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xl"><i className="fa-solid fa-building-columns"></i></div>
+                    <button onClick={() => deleteAccount(acc.id)} className="text-slate-300 hover:text-rose-500"><i className="fa-solid fa-trash"></i></button>
                   </div>
                   <h4 className="font-black text-xl text-slate-800">{acc.name}</h4>
                   <p className="text-slate-400 font-bold text-sm mb-4">{acc.bankName}</p>
@@ -300,8 +289,9 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'transactions' && (
-          <div className="space-y-10 animate-fadeIn">
+          <div className="space-y-8 animate-fadeIn">
             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
+              <h3 className="text-lg font-black mb-6">記一筆帳</h3>
               <form className="grid grid-cols-1 md:grid-cols-6 gap-3" onSubmit={(e) => {
                 e.preventDefault();
                 const fd = new FormData(e.currentTarget);
@@ -315,25 +305,25 @@ const App: React.FC = () => {
                 });
                 e.currentTarget.reset();
               }}>
-                <select name="type" className="px-4 py-3 rounded-xl border font-bold">
+                <select name="type" className="px-4 py-3 rounded-xl border">
                   <option value={TransactionType.EXPENSE}>支出</option>
                   <option value={TransactionType.INCOME}>收入</option>
                 </select>
-                <select name="accountId" className="px-4 py-3 rounded-xl border font-bold">
+                <select name="accountId" className="px-4 py-3 rounded-xl border">
                   {state.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
-                <select name="categoryId" className="px-4 py-3 rounded-xl border font-bold">
+                <select name="categoryId" className="px-4 py-3 rounded-xl border">
                   {state.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <input type="number" name="amount" required placeholder="金額" className="px-4 py-3 rounded-xl border font-black" />
-                <input type="date" name="date" required defaultValue={new Date().toISOString().split('T')[0]} className="px-4 py-3 rounded-xl border font-bold" />
-                <button type="submit" className="bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700">紀錄</button>
+                <input type="date" name="date" required defaultValue={new Date().toISOString().split('T')[0]} className="px-4 py-3 rounded-xl border" />
+                <button type="submit" className="bg-blue-600 text-white font-black rounded-xl">儲存</button>
                 <div className="md:col-span-6"><input type="text" name="note" placeholder="備註..." className="w-full px-5 py-3 rounded-xl border" /></div>
               </form>
             </div>
             <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
               <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-100">
+                <thead className="bg-slate-50 border-b">
                   <tr>
                     <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase">日期</th>
                     <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase">類別</th>
@@ -344,7 +334,7 @@ const App: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {state.transactions.map(t => (
-                    <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={t.id} className="hover:bg-slate-50">
                       <td className="px-8 py-4 text-sm font-bold text-slate-500">{t.date}</td>
                       <td className="px-8 py-4 font-black text-slate-800">{state.categories.find(c => c.id === t.categoryId)?.name}</td>
                       <td className="px-8 py-4 text-sm font-bold text-slate-500">{state.accounts.find(a => a.id === t.accountId)?.name}</td>
@@ -361,73 +351,51 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'fortune' && (
-          <div className="space-y-10 animate-fadeIn">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center text-center">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 text-2xl ${riskProfile.status === 'SAFE' ? 'bg-emerald-100 text-emerald-600' : riskProfile.status === 'WARNING' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
-                   <i className={`fa-solid ${riskProfile.status === 'SAFE' ? 'fa-shield-check' : 'fa-triangle-exclamation'}`}></i>
-                </div>
-                <h4 className="text-xs font-black text-slate-400 uppercase">財務安全水位</h4>
-                <p className="text-3xl font-black text-slate-900 mt-2">{riskProfile.emergencyFundRatio.toFixed(1)} <span className="text-sm">個月</span></p>
-              </div>
-              <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center text-center">
-                 <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4 text-2xl"><i className="fa-solid fa-chart-line-up"></i></div>
-                 <h4 className="text-sm font-black text-slate-400 uppercase">財務穩健得分</h4>
-                 <p className="text-3xl font-black text-slate-900 mt-2">{Math.round(riskProfile.riskScore)} <span className="text-sm">分</span></p>
-                 <div className="w-full h-2 bg-slate-100 rounded-full mt-4"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${riskProfile.riskScore}%` }}></div></div>
-              </div>
-              <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center text-center">
-                 <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mb-4 text-2xl"><i className="fa-solid fa-crystal-ball"></i></div>
-                 <h4 className="text-sm font-black text-slate-400 uppercase">命理理財標籤</h4>
-                 <p className="text-xl font-black text-slate-900 mt-2">{state.currentUser?.zodiac || '尚未設定'}</p>
-                 <p className="text-xs font-bold text-slate-400 mt-1">{state.currentUser?.chineseZodiac ? `屬${state.currentUser.chineseZodiac}` : '請設定生日'}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <div className="space-y-8 animate-fadeIn">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
-                <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center"><i className="fa-solid fa-star-and-crescent mr-4 text-purple-500"></i>設定理財命盤</h3>
+                <h3 className="text-2xl font-black mb-6">設定命盤</h3>
                 <form className="space-y-6" onSubmit={handleBirthdaySubmit}>
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase ml-1">出生年月日</label>
-                    <input type="date" name="birthday" required defaultValue={state.currentUser?.birthday} className="w-full px-6 py-4 rounded-2xl border font-bold" />
+                  <div>
+                    <label className="text-xs font-black text-slate-400 uppercase">出生日期</label>
+                    <input type="date" name="birthday" required defaultValue={state.currentUser?.birthday} className="w-full px-6 py-4 rounded-2xl border font-bold mt-2" />
                   </div>
-                  <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black hover:bg-black transition-all">更新並保存命理資訊</button>
+                  <button type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black">儲存生日</button>
                 </form>
                 {state.currentUser?.birthday && (
-                  <button onClick={fetchFortune} disabled={isFortuneLoading} className="w-full mt-6 bg-purple-600 text-white py-5 rounded-2xl font-black hover:bg-purple-700 transition-all flex items-center justify-center">
-                    {isFortuneLoading ? <i className="fa-solid fa-spinner fa-spin mr-3"></i> : <i className="fa-solid fa-wand-magic-sparkles mr-3"></i>}
-                    生成財運報告
+                  <button onClick={fetchFortune} disabled={isFortuneLoading} className="w-full mt-4 bg-purple-600 text-white py-4 rounded-2xl font-black flex items-center justify-center">
+                    {isFortuneLoading ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-wand-magic-sparkles mr-2"></i>}
+                    取得命理理財建議
                   </button>
                 )}
               </div>
-              <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 min-h-[400px]">
-                 {fortuneAdvice ? (
-                   <div className="prose prose-slate max-w-none animate-slideUp">
-                      {fortuneAdvice.split('\n').map((line, i) => (
-                        <p key={i} className={`mb-3 ${line.startsWith('【') ? 'text-xl font-black text-indigo-900 mt-6' : 'text-slate-600 font-medium'}`}>{line}</p>
-                      ))}
-                   </div>
-                 ) : <div className="h-full flex flex-col items-center justify-center text-slate-300"><i className="fa-solid fa-moon-stars text-7xl mb-4"></i><p className="font-black">點擊按鈕開啟命理建議</p></div>}
+              <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 min-h-[300px]">
+                {fortuneAdvice ? (
+                  <div className="prose prose-slate max-w-none">
+                    {fortuneAdvice.split('\n').map((line, i) => (
+                      <p key={i} className={`mb-2 ${line.startsWith('【') ? 'text-lg font-black text-indigo-900 mt-4' : 'text-slate-600'}`}>{line}</p>
+                    ))}
+                  </div>
+                ) : <div className="h-full flex flex-col items-center justify-center text-slate-300"><i className="fa-solid fa-moon-stars text-5xl mb-4"></i><p>尚未產生建議</p></div>}
               </div>
             </div>
           </div>
         )}
 
         {activeTab === 'advice' && (
-          <div className="space-y-10 animate-fadeIn">
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-800 p-12 rounded-[3rem] text-white shadow-xl flex flex-col items-start">
-              <h3 className="text-3xl font-black mb-4">AI 財務專家報告</h3>
-              <p className="text-blue-100 font-bold mb-8 max-w-xl">基於 Gemini-3-Pro 的深度機器學習分析，為您的每一筆收支提供最專業的優化策略與未來財務預測。</p>
-              <button onClick={fetchAiAdvice} disabled={isAiLoading} className="bg-white text-blue-900 px-10 py-5 rounded-2xl font-black text-xl hover:scale-105 transition-all flex items-center shadow-2xl disabled:opacity-50">
-                {isAiLoading ? <i className="fa-solid fa-brain fa-spin mr-4"></i> : <i className="fa-solid fa-sparkles mr-4"></i>}
-                {isAiLoading ? "診斷中..." : "開始 AI 深度診斷"}
+          <div className="space-y-8 animate-fadeIn">
+             <div className="bg-blue-600 p-12 rounded-[3rem] text-white shadow-xl">
+              <h3 className="text-3xl font-black mb-4">AI 深度財務診斷</h3>
+              <p className="mb-8 opacity-80">基於您當前的消費習慣與資產配置，Gemini 為您量身打造理財計畫。</p>
+              <button onClick={fetchAiAdvice} disabled={isAiLoading} className="bg-white text-blue-600 px-8 py-4 rounded-2xl font-black text-lg shadow-lg disabled:opacity-50">
+                {isAiLoading ? '分析中...' : '立即診斷'}
               </button>
             </div>
             {aiAdvice && (
-              <div className="bg-white p-12 rounded-[3rem] shadow-sm border border-slate-100 animate-slideUp">
+              <div className="bg-white p-10 rounded-[3rem] shadow-sm border animate-slideUp">
                 <div className="prose prose-slate max-w-none">
                   {aiAdvice.split('\n').map((line, i) => (
-                    <p key={i} className={`mb-4 ${line.startsWith('【') ? 'text-2xl font-black text-slate-900 mt-8' : 'text-slate-600 text-lg leading-relaxed'}`}>{line}</p>
+                    <p key={i} className={`mb-4 ${line.startsWith('【') ? 'text-xl font-black text-slate-900 mt-6' : 'text-slate-600 leading-relaxed'}`}>{line}</p>
                   ))}
                 </div>
               </div>
