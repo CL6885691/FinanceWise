@@ -20,7 +20,6 @@ const getZodiac = (dateStr: string) => {
 const getChineseZodiac = (dateStr: string) => {
   const year = new Date(dateStr).getFullYear();
   const animals = ["鼠", "牛", "虎", "兔", "龍", "蛇", "馬", "羊", "猴", "雞", "狗", "豬"];
-  // 修正負數取模問題
   return animals[(((year - 4) % 12) + 12) % 12];
 };
 
@@ -32,7 +31,6 @@ const App: React.FC = () => {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isFortuneLoading, setIsFortuneLoading] = useState(false);
   
-  // 登入相關狀態
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -72,7 +70,8 @@ const App: React.FC = () => {
           currentUser: { 
             id: firebaseUser.uid, 
             email: firebaseUser.email || '', 
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '使用者' 
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '使用者',
+            ...(savedData?.currentUser || {})
           },
           accounts: savedData?.accounts || prev.accounts,
           transactions: savedData?.transactions || prev.transactions
@@ -107,70 +106,82 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  const handleBirthdaySubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleBirthdaySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const bday = fd.get('birthday') as string;
     if (!bday) return;
-    setState(prev => ({
-      ...prev,
-      currentUser: prev.currentUser ? {
-        ...prev.currentUser,
-        birthday: bday,
-        zodiac: getZodiac(bday),
-        chineseZodiac: getChineseZodiac(bday)
-      } : null
-    }));
+    
+    const updatedUser = state.currentUser ? {
+      ...state.currentUser,
+      birthday: bday,
+      zodiac: getZodiac(bday),
+      chineseZodiac: getChineseZodiac(bday)
+    } : null;
+
+    const newState = { ...state, currentUser: updatedUser };
+    setState(newState);
+    await dbService.saveState(newState);
+    alert('個人理財命盤已更新！');
   };
 
   const fetchAiAdvice = async () => {
     setIsAiLoading(true);
-    const advice = await getFinancialAdvice(state.transactions, state.categories, state.accounts);
-    setAiAdvice(advice);
-    setIsAiLoading(false);
+    try {
+      const advice = await getFinancialAdvice(state.transactions, state.categories, state.accounts);
+      setAiAdvice(advice);
+    } catch (e) {
+      setAiAdvice("診斷失敗，請確認網路連線或 API Key 設定。");
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   const fetchFortune = async () => {
-    if (!state.currentUser?.birthday) return;
+    if (!state.currentUser?.birthday) {
+      alert('請先在下方設定您的生日資訊。');
+      return;
+    }
     setIsFortuneLoading(true);
-    const total = state.accounts.reduce((sum, acc) => sum + acc.balance, 0);
-    const advice = await getFortuneAdvice(state.currentUser, total);
-    setFortuneAdvice(advice);
-    setIsFortuneLoading(false);
+    try {
+      const total = state.accounts.reduce((sum, acc) => sum + acc.balance, 0);
+      const advice = await getFortuneAdvice(state.currentUser, total);
+      setFortuneAdvice(advice);
+    } catch (e) {
+      setFortuneAdvice("命理大師目前休息中...請稍後再試。");
+    } finally {
+      setIsFortuneLoading(false);
+    }
   };
 
-  const addTransaction = (t: Omit<Transaction, 'id'>) => {
+  const addTransaction = async (t: Omit<Transaction, 'id'>) => {
     const newTransaction = { ...t, id: Date.now().toString() };
-    setState(prev => {
-      const accounts = prev.accounts.map(acc => {
-        if (acc.id === t.accountId) {
-          return { ...acc, balance: t.type === TransactionType.INCOME ? acc.balance + t.amount : acc.balance - t.amount };
-        }
-        return acc;
-      });
-      const newState = { ...prev, transactions: [newTransaction, ...prev.transactions], accounts };
-      dbService.saveState(newState);
-      return newState;
+    const accounts = state.accounts.map(acc => {
+      if (acc.id === t.accountId) {
+        return { ...acc, balance: t.type === TransactionType.INCOME ? acc.balance + t.amount : acc.balance - t.amount };
+      }
+      return acc;
     });
+    const newState = { ...state, transactions: [newTransaction, ...state.transactions], accounts };
+    setState(newState);
+    await dbService.saveState(newState);
   };
 
-  const deleteTransaction = (id: string) => {
-    setState(prev => {
-      const target = prev.transactions.find(t => t.id === id);
-      if (!target) return prev;
-      const accounts = prev.accounts.map(acc => {
-        if (acc.id === target.accountId) {
-          return { ...acc, balance: target.type === TransactionType.INCOME ? acc.balance - target.amount : acc.balance + target.amount };
-        }
-        return acc;
-      });
-      const newState = { ...prev, transactions: prev.transactions.filter(t => t.id !== id), accounts };
-      dbService.saveState(newState);
-      return newState;
+  const deleteTransaction = async (id: string) => {
+    const target = state.transactions.find(t => t.id === id);
+    if (!target) return;
+    const accounts = state.accounts.map(acc => {
+      if (acc.id === target.accountId) {
+        return { ...acc, balance: target.type === TransactionType.INCOME ? acc.balance - target.amount : acc.balance + target.amount };
+      }
+      return acc;
     });
+    const newState = { ...state, transactions: state.transactions.filter(t => t.id !== id), accounts };
+    setState(newState);
+    await dbService.saveState(newState);
   };
 
-  const handleAddAccount = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddAccount = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const newAcc: BankAccount = {
@@ -180,21 +191,17 @@ const App: React.FC = () => {
       balance: Number(fd.get('balance')),
       color: 'bg-blue-600'
     };
-    setState(prev => {
-      const newState = { ...prev, accounts: [...prev.accounts, newAcc] };
-      dbService.saveState(newState);
-      return newState;
-    });
+    const newState = { ...state, accounts: [...state.accounts, newAcc] };
+    setState(newState);
+    await dbService.saveState(newState);
     e.currentTarget.reset();
   };
 
-  const deleteAccount = (id: string) => {
+  const deleteAccount = async (id: string) => {
     if (!confirm('確定刪除？這將會影響資產總計。')) return;
-    setState(prev => {
-      const newState = { ...prev, accounts: prev.accounts.filter(a => a.id !== id) };
-      dbService.saveState(newState);
-      return newState;
-    });
+    const newState = { ...state, accounts: state.accounts.filter(a => a.id !== id) };
+    setState(newState);
+    await dbService.saveState(newState);
   };
 
   if (!state.isLoggedIn) return (
@@ -382,13 +389,13 @@ const App: React.FC = () => {
                 <form className="space-y-6" onSubmit={handleBirthdaySubmit}>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-400 uppercase ml-1">出生年月日</label>
-                    <input type="date" name="birthday" required className="w-full px-6 py-4 rounded-2xl border font-bold" />
+                    <input type="date" name="birthday" required defaultValue={state.currentUser?.birthday} className="w-full px-6 py-4 rounded-2xl border font-bold" />
                   </div>
-                  <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black hover:bg-black transition-all">更新命理資訊</button>
+                  <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black hover:bg-black transition-all">更新並保存命理資訊</button>
                 </form>
                 {state.currentUser?.birthday && (
                   <button onClick={fetchFortune} disabled={isFortuneLoading} className="w-full mt-6 bg-purple-600 text-white py-5 rounded-2xl font-black hover:bg-purple-700 transition-all flex items-center justify-center">
-                    {isFortuneLoading ? <i className="fa-solid fa-spinner-third fa-spin mr-3"></i> : <i className="fa-solid fa-wand-magic-sparkles mr-3"></i>}
+                    {isFortuneLoading ? <i className="fa-solid fa-spinner fa-spin mr-3"></i> : <i className="fa-solid fa-wand-magic-sparkles mr-3"></i>}
                     生成財運報告
                   </button>
                 )}

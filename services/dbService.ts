@@ -1,10 +1,10 @@
 
-import { AppState, BankAccount, Transaction } from '../types';
+import { AppState, BankAccount, Transaction, User } from '../types';
 import { INITIAL_ACCOUNTS, INITIAL_TRANSACTIONS, DEFAULT_CATEGORIES } from '../constants';
 import { db, auth } from './firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-const LOCAL_STORAGE_KEY = 'finance_wise_state_demo';
+const LOCAL_STORAGE_KEY = 'finance_wise_state_v2';
 
 class DatabaseService {
   private isFormalMode: boolean = false;
@@ -14,17 +14,21 @@ class DatabaseService {
   }
 
   async saveState(state: AppState): Promise<void> {
-    // If not in formal mode or Firebase isn't initialized, save to LocalStorage
-    if (!this.isFormalMode || !db || !auth?.currentUser) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
-      return;
-    }
+    // 儲存至本地作為備份或展示模式
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+      accounts: state.accounts,
+      transactions: state.transactions,
+      currentUser: state.currentUser
+    }));
+
+    if (!this.isFormalMode || !db || !auth?.currentUser) return;
 
     try {
       const userRef = doc(db, "users", auth.currentUser.uid);
       await setDoc(userRef, {
         accounts: state.accounts,
         transactions: state.transactions,
+        userProfile: state.currentUser,
         lastUpdated: new Date().toISOString()
       }, { merge: true });
     } catch (e) {
@@ -45,7 +49,8 @@ class DatabaseService {
         const data = docSnap.data();
         return {
           accounts: data.accounts || [],
-          transactions: data.transactions || []
+          transactions: data.transactions || [],
+          currentUser: data.userProfile || null
         };
       }
     } catch (e) {
