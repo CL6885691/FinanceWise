@@ -10,7 +10,7 @@ let auth: any = null;
 let db: any = null;
 
 /**
- * 💡 已填入您的 Firebase 配置資料
+ * 💡 已更新為您提供的最新 Firebase 配置資料
  */
 const firebaseConfigFromCode = {
   apiKey: "AIzaSyD5RAzIF5t16lShgtfQ53L3SoKcO4QsKxY",
@@ -18,13 +18,21 @@ const firebaseConfigFromCode = {
   projectId: "smartwealth-ai-d7ac4",
   storageBucket: "smartwealth-ai-d7ac4.firebasestorage.app",
   messagingSenderId: "646783215976",
-  appId: "1:646783215976:web:00e2d7ea9e900004300edd",
-  measurementId: "G-SHY324MD68"
+  appId: "1:646783215976:web:253e3072e8b65c9c300edd",
+  measurementId: "G-BJWNT37KL5"
 };
 
 // 優先檢查環境變數（適用於 GitHub Actions），若無則使用上方配置
 const configStr = process.env.FIREBASE_CONFIG;
-const finalConfig = configStr ? JSON.parse(configStr) : firebaseConfigFromCode;
+let finalConfig = firebaseConfigFromCode;
+
+if (configStr && configStr !== "undefined" && configStr !== "null" && configStr !== "") {
+  try {
+    finalConfig = JSON.parse(configStr);
+  } catch (e) {
+    console.error("解析 FIREBASE_CONFIG 失敗，使用預設配置:", e);
+  }
+}
 
 // 檢查是否已填寫必要的 apiKey
 const isConfigValid = finalConfig && finalConfig.apiKey && finalConfig.apiKey !== "";

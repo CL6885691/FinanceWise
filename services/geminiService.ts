@@ -7,7 +7,7 @@ import { Transaction, Category, BankAccount, TransactionType, User } from "../ty
  */
 const checkApiKey = () => {
   const key = process.env.API_KEY;
-  if (!key || key === "undefined" || key === "") {
+  if (!key || key === "undefined" || key === "" || key === "null") {
     return null;
   }
   return key;
@@ -51,10 +51,10 @@ export const getFinancialAdvice = async (
     return response.text || "AI 分析完成，但未傳回內容。";
   } catch (error: any) {
     console.error("Financial AI Error:", error);
-    if (error.message?.includes("API_KEY_INVALID")) {
-      return "❌ API 金鑰無效，請檢查金鑰是否正確複製。";
+    if (error?.message?.includes("API_KEY_INVALID")) {
+      return "❌ API 金鑰無效。請檢查您的 Gemini API Key 是否正確設定在 GitHub Secrets 中。";
     }
-    return `❌ 診斷發生異常：${error.message || "可能是網路不穩或 API 額度限制，請稍後再試。"}`;
+    return `❌ 診斷失敗：伺服器目前忙碌或金鑰設定有誤。請確認您的 API 金鑰是否已啟用，或稍後再試。`;
   }
 };
 
@@ -63,7 +63,7 @@ export const getFortuneAdvice = async (user: User, totalBalance: number) => {
 
   const apiKey = checkApiKey();
   if (!apiKey) {
-    return "⚠️ 占卜球感應不到星象，原因：API 金鑰尚未配置於 GitHub Secrets 中。";
+    return "⚠️ 占卜球感應不到星象。原因：API 金鑰尚未配置於 GitHub Secrets 中。";
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -90,6 +90,6 @@ export const getFortuneAdvice = async (user: User, totalBalance: number) => {
     return response.text || "占卜球目前一片空白。";
   } catch (error: any) {
     console.error("Fortune AI Error Detail:", error);
-    return `🔮 占卜失敗：${error.message || "星象不穩，請確認網路連線或 API 設定。"}`;
+    return "🔮 占卜失敗：目前無法連線至星象儀。請檢查 API 金鑰設定或網路狀態。";
   }
 };
