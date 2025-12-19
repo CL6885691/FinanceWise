@@ -38,6 +38,28 @@ const App: React.FC = () => {
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
+  // 錯誤代碼翻譯
+  const translateError = (code: string) => {
+    switch (code) {
+      case 'auth/invalid-credential':
+        return '電子郵件或密碼錯誤，請重新檢查。';
+      case 'auth/user-not-found':
+        return '找不到此帳號，請確認是否已註冊。';
+      case 'auth/wrong-password':
+        return '密碼輸入錯誤。';
+      case 'auth/email-already-in-use':
+        return '此電子郵件已被註冊，請直接登入。';
+      case 'auth/weak-password':
+        return '密碼強度不足，請輸入至少 6 位字元。';
+      case 'auth/invalid-email':
+        return '電子郵件格式不正確。';
+      case 'auth/operation-not-allowed':
+        return 'Firebase 尚未啟用此登入方式，請聯繫管理員。';
+      default:
+        return `認證發生問題：${code}`;
+    }
+  };
+
   const riskProfile = useMemo((): FinancialRiskProfile => {
     const totalBalance = state.accounts.reduce((sum, acc) => sum + acc.balance, 0);
     const expenses = state.transactions.filter(t => t.type === TransactionType.EXPENSE);
@@ -59,7 +81,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!auth) return;
-    // Fix: Using onAuthStateChanged from service and typing firebaseUser as any to avoid internal type conflicts
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: any) => {
       if (firebaseUser) {
         dbService.setMode(true);
@@ -84,7 +105,10 @@ const App: React.FC = () => {
 
   const handleAuthAction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth) return;
+    if (!auth) {
+      setAuthError('Firebase 尚未正確初始化。');
+      return;
+    }
     setIsAuthLoading(true);
     setAuthError('');
     try {
@@ -95,14 +119,15 @@ const App: React.FC = () => {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       }
     } catch (err: any) {
-      setAuthError(err.message || '認證失敗');
+      console.error("Auth Error:", err.code, err.message);
+      setAuthError(translateError(err.code || err.message));
     } finally {
       setIsAuthLoading(false);
     }
   };
 
   const handleLogout = () => {
-    auth?.signOut?.(); // Graceful check if signOut exists on auth instance
+    auth?.signOut?.(); 
     localStorage.clear();
     setState(dbService.getInitialState());
     setActiveTab('dashboard');
@@ -209,33 +234,62 @@ const App: React.FC = () => {
   if (!state.isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-10 animate-fadeIn">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-10 animate-fadeIn border border-slate-100">
           <div className="text-center mb-8">
-            <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white text-3xl shadow-xl">
+            <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white text-3xl shadow-xl shadow-blue-500/20">
               <i className="fa-solid fa-wallet"></i>
             </div>
             <h2 className="text-3xl font-black text-slate-800">FinanceWise</h2>
-            <p className="text-slate-400 font-bold">登入以管理您的個人財務</p>
+            <p className="text-slate-400 font-bold mt-2">
+              {isRegisterMode ? '立即建立理財專案' : '登入以管理個人財務'}
+            </p>
           </div>
           
           <form onSubmit={handleAuthAction} className="space-y-4">
             {isRegisterMode && (
-              <input type="text" required value={authName} onChange={e => setAuthName(e.target.value)} className="w-full px-5 py-3 rounded-xl border" placeholder="您的稱呼" />
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase mb-1 block ml-1">顯示名稱</label>
+                <input type="text" required value={authName} onChange={e => setAuthName(e.target.value)} className="w-full px-5 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all" placeholder="您的稱呼" />
+              </div>
             )}
-            <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full px-5 py-3 rounded-xl border" placeholder="電子郵件" />
-            <input type="password" required value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="w-full px-5 py-3 rounded-xl border" placeholder="密碼" />
-            {authError && <p className="text-rose-500 text-xs font-bold">{authError}</p>}
-            <button type="submit" disabled={isAuthLoading} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black hover:bg-blue-700 transition-all">
-              {isAuthLoading ? '處理中...' : (isRegisterMode ? '建立帳號' : '登入')}
+            <div>
+              <label className="text-xs font-black text-slate-400 uppercase mb-1 block ml-1">電子郵件</label>
+              <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full px-5 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all" placeholder="example@email.com" />
+            </div>
+            <div>
+              <label className="text-xs font-black text-slate-400 uppercase mb-1 block ml-1">密碼</label>
+              <input type="password" required value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="w-full px-5 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all" placeholder="••••••••" />
+            </div>
+            
+            {authError && (
+              <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl flex items-start space-x-3">
+                <i className="fa-solid fa-circle-exclamation text-rose-500 mt-1"></i>
+                <p className="text-rose-600 text-sm font-bold leading-tight">{authError}</p>
+              </div>
+            )}
+
+            <button type="submit" disabled={isAuthLoading} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center space-x-2">
+              {isAuthLoading && <i className="fa-solid fa-spinner fa-spin"></i>}
+              <span>{isAuthLoading ? '處理中...' : (isRegisterMode ? '建立帳號' : '登入')}</span>
             </button>
           </form>
-          <div className="mt-6 text-center">
-            <button onClick={() => setIsRegisterMode(!isRegisterMode)} className="text-blue-600 text-sm font-bold">
-              {isRegisterMode ? '已有帳號？登入' : '還沒有帳號？註冊'}
+
+          <div className="mt-8 text-center space-y-4">
+            <button onClick={() => { setIsRegisterMode(!isRegisterMode); setAuthError(''); }} className="text-blue-600 text-sm font-black hover:underline">
+              {isRegisterMode ? '已經有帳號？按此登入' : '還沒有帳號？按此註冊新帳號'}
             </button>
-            <div className="my-4 border-t border-slate-100 pt-4">
-               <button onClick={() => setState(prev => ({ ...prev, isLoggedIn: true, currentUser: { id: 'demo', email: 'demo@test.com', name: '體驗用戶' } }))} className="text-slate-400 text-sm font-bold">以訪客模式繼續</button>
+            
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-300 font-bold">或者</span></div>
             </div>
+
+            <button 
+              onClick={() => setState(prev => ({ ...prev, isLoggedIn: true, currentUser: { id: 'demo', email: 'demo@test.com', name: '體驗用戶' } }))} 
+              className="w-full bg-slate-50 text-slate-600 py-3 rounded-xl text-sm font-black border border-slate-100 hover:bg-slate-100 transition-all"
+            >
+              以訪客模式繼續體驗
+            </button>
           </div>
         </div>
       </div>

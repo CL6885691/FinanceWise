@@ -2,16 +2,28 @@
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, Category, BankAccount, TransactionType, User } from "../types";
 
-// Always use process.env.API_KEY directly for initializing GoogleGenAI
-// and ensure we use the correct model names and property access (response.text)
+/**
+ * 檢查 API Key 是否有效
+ */
+const checkApiKey = () => {
+  const key = process.env.API_KEY;
+  if (!key || key === "undefined" || key === "") {
+    return null;
+  }
+  return key;
+};
 
 export const getFinancialAdvice = async (
   transactions: Transaction[],
   categories: Category[],
   accounts: BankAccount[]
 ) => {
-  // Use API key directly from process.env as per guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = checkApiKey();
+  if (!apiKey) {
+    return "⚠️ 偵測到 API 金鑰設定缺失。\n\n解決方法：\n1. 請確保在 GitHub Repository 的 Settings > Secrets and variables > Actions 中已新增名為 `API_KEY` 的金鑰。\n2. 重新執行 GitHub Actions 的部署工作。";
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
   const totalIncome = transactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + t.amount, 0);
   const totalExpense = transactions.filter(t => t.type === TransactionType.EXPENSE).reduce((sum, t) => sum + t.amount, 0);
@@ -36,19 +48,25 @@ export const getFinancialAdvice = async (
       model: 'gemini-3-pro-preview',
       contents: prompt,
     });
-    // Directly access .text property
-    return response.text || "分析結果為空。";
+    return response.text || "AI 分析完成，但未傳回內容。";
   } catch (error: any) {
     console.error("Financial AI Error:", error);
-    return `診斷過程中發生錯誤：${error.message || "未知錯誤"}`;
+    if (error.message?.includes("API_KEY_INVALID")) {
+      return "❌ API 金鑰無效，請檢查金鑰是否正確複製。";
+    }
+    return `❌ 診斷發生異常：${error.message || "可能是網路不穩或 API 額度限制，請稍後再試。"}`;
   }
 };
 
 export const getFortuneAdvice = async (user: User, totalBalance: number) => {
-  if (!user.birthday || !user.zodiac) return "請先設定您的生日資訊以開啟算命功能。";
+  if (!user.birthday || !user.zodiac) return "請先在下方設定您的生日資訊。";
 
-  // Use API key directly from process.env as per guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = checkApiKey();
+  if (!apiKey) {
+    return "⚠️ 占卜球感應不到星象，原因：API 金鑰尚未配置於 GitHub Secrets 中。";
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
 
   const prompt = `
     你是一位理財大師，專長是結合現代金流分析與東西方占星。
@@ -69,10 +87,9 @@ export const getFortuneAdvice = async (user: User, totalBalance: number) => {
       model: 'gemini-3-pro-preview',
       contents: prompt,
     });
-    // Directly access .text property
-    return response.text || "占卜球無法顯示訊息。";
+    return response.text || "占卜球目前一片空白。";
   } catch (error: any) {
     console.error("Fortune AI Error Detail:", error);
-    return `占卜球目前一片模糊... (${error.message || "可能是因為星象不穩，請稍後再試。"})`;
+    return `🔮 占卜失敗：${error.message || "星象不穩，請確認網路連線或 API 設定。"}`;
   }
 };

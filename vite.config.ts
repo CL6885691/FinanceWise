@@ -6,9 +6,9 @@ export default defineConfig({
   plugins: [react()],
   base: './', 
   define: {
-    // 確保這些變數在全域可用
-    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || ""),
-    'process.env.FIREBASE_CONFIG': JSON.stringify(process.env.FIREBASE_CONFIG || "")
+    // 使用 String() 包裹確保傳入的是字串，避免產生 undefined symbol
+    'process.env.API_KEY': JSON.stringify(String(process.env.API_KEY || "")),
+    'process.env.FIREBASE_CONFIG': JSON.stringify(String(process.env.FIREBASE_CONFIG || ""))
   },
   build: {
     minify: 'terser',
