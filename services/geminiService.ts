@@ -3,9 +3,10 @@ import { GoogleGenAI } from "@google/genai";
 import { Transaction, Category, BankAccount, TransactionType, User } from "../types";
 
 /**
- * 檢查 API Key 是否有效
+ * 檢查環境變數中的 API Key
  */
 const checkApiKey = () => {
+  // 檢查 process.env.API_KEY (Vite 打包後會被替換為實際字串)
   const key = process.env.API_KEY;
   if (!key || key === "undefined" || key === "" || key === "null") {
     return null;
@@ -20,7 +21,7 @@ export const getFinancialAdvice = async (
 ) => {
   const apiKey = checkApiKey();
   if (!apiKey) {
-    return "⚠️ 偵測到 API 金鑰設定缺失。\n\n解決方法：\n1. 請確保在 GitHub Repository 的 Settings > Secrets and variables > Actions 中已新增名為 `API_KEY` 的金鑰。\n2. 重新執行 GitHub Actions 的部署工作。";
+    return "⚠️ 偵測到 API 金鑰未注入。\n\n**解決步驟：**\n1. 前往 GitHub Repo > Settings > Secrets > Actions。\n2. 新增 `API_KEY` 並填入您的 Gemini Key。\n3. 重新推動程式碼或重新執行 Action。";
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -37,29 +38,18 @@ export const getFinancialAdvice = async (
   - 本月支出：$${totalExpense.toLocaleString()}
   - 支出細項：${expenseByCategory.length > 0 ? expenseByCategory.map(e => `${e.name}:$${e.amount}`).join(', ') : '目前尚無支出紀錄'}
   
-  請提供 Markdown 報告：
-  1. 【財務健康度評分】：給出 0-100 分並解釋原因。
-  2. 【消費習慣診斷】：分析支出結構是否合理。
-  3. 【具體行動建議】：給出 3 個可以立即執行的理財建議。
-  使用繁體中文，語氣專業且鼓勵。`;
+  請提供 Markdown 報告，包含財務健康評分、消費診斷與具體建議。使用繁體中文。`;
 
   try {
-    // 使用 gemini-3-flash-preview 通常比 pro 更穩定且不易觸發配額限制
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
     return response.text || "AI 分析完成，但未傳回內容。";
   } catch (error: any) {
-    console.error("Financial AI Error:", error);
-    const errorMsg = error?.message || String(error);
-    if (errorMsg.includes("403")) {
-      return `❌ API 權限錯誤 (403)：\n請檢查您的 API Key 是否已在 Google AI Studio 啟用，並確保沒有設定錯誤的 IP 限制。`;
-    }
-    if (errorMsg.includes("429")) {
-      return `❌ 請求太頻繁 (429)：\n免費版 API 有次數限制，請等一分鐘後再試。`;
-    }
-    return `❌ 診斷失敗：${errorMsg}`;
+    console.error("Gemini API Error:", error);
+    // 輸出具體錯誤訊息，幫助使用者排查
+    return `❌ AI 分析失敗\n錯誤訊息：${error.message || '連線逾時或金鑰無效'}\n\n請確認您的 API 金鑰已啟用 "Generative Language API" 權限。`;
   }
 };
 
@@ -68,23 +58,16 @@ export const getFortuneAdvice = async (user: User, totalBalance: number) => {
 
   const apiKey = checkApiKey();
   if (!apiKey) {
-    return "⚠️ 占卜球感應不到星象。原因：API 金鑰尚未配置。";
+    return "⚠️ 占卜球失效：環境變數中找不到 API 金鑰。";
   }
 
   const ai = new GoogleGenAI({ apiKey });
 
   const prompt = `
-    你是一位理財大師，專長是結合現代金流分析與東西方占星。
-    使用者：${user.name}
-    特質：${user.zodiac} (生肖：${user.chineseZodiac})
-    目前總資產：$${totalBalance.toLocaleString()}
-    
-    請以此生成一份「理財命盤分析」：
-    1. 【今日財星方位】：根據生肖星座推算的幸運方位。
-    2. 【星座理財盲點】：該星座常見的消費陷阱與近期需注意的風險。
-    3. 【玄學轉運建議】：結合總資產狀況，給予 3 個開運動作。
-    
-    語氣神祕且溫馨，繁體中文。
+    你是一位理財大師，專長是結合現代金流與占星。
+    使用者：${user.name}，${user.zodiac} (生肖：${user.chineseZodiac})
+    目前資產：$${totalBalance.toLocaleString()}
+    請生成 Markdown 格式的理財命盤，包含財星方位、理財盲點與玄學轉運建議。使用繁體中文。
   `;
 
   try {
@@ -94,8 +77,7 @@ export const getFortuneAdvice = async (user: User, totalBalance: number) => {
     });
     return response.text || "占卜球目前一片空白。";
   } catch (error: any) {
-    console.error("Fortune AI Error Detail:", error);
-    const errorMsg = error?.message || String(error);
-    return `🔮 占卜失敗，詳細原因：\n${errorMsg}\n\n(提示：請確認您的 API 金鑰是否有效且已啟用 Generative Language API)`;
+    console.error("Fortune API Error:", error);
+    return `🔮 占卜系統異常\n原因：${error.message}\n\n請檢查 Google AI Studio 中的 API 使用配額是否已滿。`;
   }
 };
