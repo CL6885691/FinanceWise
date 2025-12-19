@@ -10,16 +10,16 @@ let auth: any = null;
 let db: any = null;
 
 /**
- * 💡 已更新為您提供的最新 Firebase 配置資料
+ * 💡 已更新為您提供的最新 Firebase 配置資料 (financewise-d3fe5)
  */
 const firebaseConfigFromCode = {
-  apiKey: "AIzaSyD5RAzIF5t16lShgtfQ53L3SoKcO4QsKxY",
-  authDomain: "smartwealth-ai-d7ac4.firebaseapp.com",
-  projectId: "smartwealth-ai-d7ac4",
-  storageBucket: "smartwealth-ai-d7ac4.firebasestorage.app",
-  messagingSenderId: "646783215976",
-  appId: "1:646783215976:web:253e3072e8b65c9c300edd",
-  measurementId: "G-BJWNT37KL5"
+  apiKey: "AIzaSyBWaQ4UbYjrM4BlDKEYnaXHULKqy0qF6QQ",
+  authDomain: "financewise-d3fe5.firebaseapp.com",
+  projectId: "financewise-d3fe5",
+  storageBucket: "financewise-d3fe5.firebasestorage.app",
+  messagingSenderId: "120581227842",
+  appId: "1:120581227842:web:7ef7f7f158425ff4b874db",
+  measurementId: "G-Q8BSCNM19H"
 };
 
 // 優先檢查環境變數（適用於 GitHub Actions），若無則使用上方配置
@@ -46,7 +46,7 @@ if (isConfigValid) {
     }
     auth = getAuth(app);
     db = getFirestore(app);
-    console.log("Firebase 成功初始化");
+    console.log("Firebase 成功初始化 (financewise-d3fe5)");
   } catch (e) {
     console.error("Firebase 初始化失敗:", e);
   }
