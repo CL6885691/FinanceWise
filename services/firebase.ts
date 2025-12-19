@@ -1,6 +1,7 @@
 
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
+// Re-exporting functions to resolve module resolution issues in App.tsx
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Use any for complex types to avoid issues with inconsistent type definitions in the environment
@@ -45,4 +46,4 @@ if (isConfigValid) {
   console.warn("Firebase 配置尚未填寫或無效，系統將以『展示模式』運作。");
 }
 
-export { auth, db };
+export { auth, db, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile };

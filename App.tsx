@@ -3,9 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import { dbService } from './services/dbService';
-import { auth } from './services/firebase';
-// Fix: Removed User as FirebaseUser import which was causing errors
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+// Import auth functions from our local service to avoid resolution issues with firebase/auth
+import { auth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from './services/firebase';
 import { AppState, Transaction, BankAccount, TransactionType, FinancialRiskProfile } from './types';
 import { getFinancialAdvice, getFortuneAdvice } from './services/geminiService';
 
@@ -60,7 +59,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!auth) return;
-    // Fix: Type firebaseUser as any to bypass the missing User export error
+    // Fix: Using onAuthStateChanged from service and typing firebaseUser as any to avoid internal type conflicts
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: any) => {
       if (firebaseUser) {
         dbService.setMode(true);
@@ -103,7 +102,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    auth?.signOut();
+    auth?.signOut?.(); // Graceful check if signOut exists on auth instance
     localStorage.clear();
     setState(dbService.getInitialState());
     setActiveTab('dashboard');

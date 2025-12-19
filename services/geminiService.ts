@@ -2,12 +2,15 @@
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, Category, BankAccount, TransactionType, User } from "../types";
 
-// Always create a new GoogleGenAI instance right before making an API call to ensure it uses the most up-to-date API key.
+// Always use process.env.API_KEY directly for initializing GoogleGenAI
+// and ensure we use the correct model names and property access (response.text)
+
 export const getFinancialAdvice = async (
   transactions: Transaction[],
   categories: Category[],
   accounts: BankAccount[]
 ) => {
+  // Use API key directly from process.env as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const totalIncome = transactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + t.amount, 0);
@@ -33,17 +36,18 @@ export const getFinancialAdvice = async (
       model: 'gemini-3-pro-preview',
       contents: prompt,
     });
+    // Directly access .text property
     return response.text || "分析結果為空。";
   } catch (error: any) {
-    console.error("AI Error:", error);
-    return `分析失敗：${error.message || "請稍後再試。"}`;
+    console.error("Financial AI Error:", error);
+    return `診斷過程中發生錯誤：${error.message || "未知錯誤"}`;
   }
 };
 
 export const getFortuneAdvice = async (user: User, totalBalance: number) => {
   if (!user.birthday || !user.zodiac) return "請先設定您的生日資訊以開啟算命功能。";
 
-  // Always create a new GoogleGenAI instance right before making an API call.
+  // Use API key directly from process.env as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const prompt = `
@@ -65,9 +69,10 @@ export const getFortuneAdvice = async (user: User, totalBalance: number) => {
       model: 'gemini-3-pro-preview',
       contents: prompt,
     });
+    // Directly access .text property
     return response.text || "占卜球無法顯示訊息。";
   } catch (error: any) {
-    console.error("Fortune AI Error:", error);
-    return "占卜球目前一片模糊...可能是因為星象不穩，請確認環境設定。";
+    console.error("Fortune AI Error Detail:", error);
+    return `占卜球目前一片模糊... (${error.message || "可能是因為星象不穩，請稍後再試。"})`;
   }
 };
