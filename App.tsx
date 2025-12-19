@@ -157,8 +157,8 @@ const App: React.FC = () => {
     try {
       const advice = await getFinancialAdvice(state.transactions, state.categories, state.accounts);
       setAiAdvice(advice);
-    } catch (e) {
-      setAiAdvice("診斷失敗，請稍後再試。");
+    } catch (e: any) {
+      setAiAdvice(`❌ 診斷失敗：${e.message || "未知錯誤"}`);
     } finally {
       setIsAiLoading(false);
     }
@@ -174,8 +174,8 @@ const App: React.FC = () => {
       const total = state.accounts.reduce((sum, acc) => sum + acc.balance, 0);
       const advice = await getFortuneAdvice(state.currentUser, total);
       setFortuneAdvice(advice);
-    } catch (e) {
-      setFortuneAdvice("占星失敗，請稍後再試。");
+    } catch (e: any) {
+      setFortuneAdvice(`❌ 占星失敗：${e.message || "未知錯誤"}`);
     } finally {
       setIsFortuneLoading(false);
     }
@@ -424,7 +424,7 @@ const App: React.FC = () => {
               </div>
               <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 min-h-[300px]">
                 {fortuneAdvice ? (
-                  <div className="prose prose-slate max-w-none">
+                  <div className={`prose prose-slate max-w-none ${fortuneAdvice.startsWith('❌') || fortuneAdvice.startsWith('🔮 占卜失敗') ? 'text-rose-600' : ''}`}>
                     {fortuneAdvice.split('\n').map((line, i) => (
                       <p key={i} className={`mb-2 ${line.startsWith('【') ? 'text-lg font-black text-indigo-900 mt-4' : 'text-slate-600'}`}>{line}</p>
                     ))}
@@ -445,8 +445,8 @@ const App: React.FC = () => {
               </button>
             </div>
             {aiAdvice && (
-              <div className="bg-white p-10 rounded-[3rem] shadow-sm border animate-slideUp">
-                <div className="prose prose-slate max-w-none">
+              <div className={`bg-white p-10 rounded-[3rem] shadow-sm border animate-slideUp ${aiAdvice.startsWith('❌') ? 'border-rose-200' : ''}`}>
+                <div className={`prose prose-slate max-w-none ${aiAdvice.startsWith('❌') ? 'text-rose-600 font-bold' : ''}`}>
                   {aiAdvice.split('\n').map((line, i) => (
                     <p key={i} className={`mb-4 ${line.startsWith('【') ? 'text-xl font-black text-slate-900 mt-6' : 'text-slate-600 leading-relaxed'}`}>{line}</p>
                   ))}

@@ -44,17 +44,22 @@ export const getFinancialAdvice = async (
   使用繁體中文，語氣專業且鼓勵。`;
 
   try {
+    // 使用 gemini-3-flash-preview 通常比 pro 更穩定且不易觸發配額限制
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
     return response.text || "AI 分析完成，但未傳回內容。";
   } catch (error: any) {
     console.error("Financial AI Error:", error);
-    if (error?.message?.includes("API_KEY_INVALID")) {
-      return "❌ API 金鑰無效。請檢查您的 Gemini API Key 是否正確設定在 GitHub Secrets 中。";
+    const errorMsg = error?.message || String(error);
+    if (errorMsg.includes("403")) {
+      return `❌ API 權限錯誤 (403)：\n請檢查您的 API Key 是否已在 Google AI Studio 啟用，並確保沒有設定錯誤的 IP 限制。`;
     }
-    return `❌ 診斷失敗：伺服器目前忙碌或金鑰設定有誤。請確認您的 API 金鑰是否已啟用，或稍後再試。`;
+    if (errorMsg.includes("429")) {
+      return `❌ 請求太頻繁 (429)：\n免費版 API 有次數限制，請等一分鐘後再試。`;
+    }
+    return `❌ 診斷失敗：${errorMsg}`;
   }
 };
 
@@ -63,7 +68,7 @@ export const getFortuneAdvice = async (user: User, totalBalance: number) => {
 
   const apiKey = checkApiKey();
   if (!apiKey) {
-    return "⚠️ 占卜球感應不到星象。原因：API 金鑰尚未配置於 GitHub Secrets 中。";
+    return "⚠️ 占卜球感應不到星象。原因：API 金鑰尚未配置。";
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -77,19 +82,20 @@ export const getFortuneAdvice = async (user: User, totalBalance: number) => {
     請以此生成一份「理財命盤分析」：
     1. 【今日財星方位】：根據生肖星座推算的幸運方位。
     2. 【星座理財盲點】：該星座常見的消費陷阱與近期需注意的風險。
-    3. 【玄學轉運建議】：結合總資產狀況，給予 3 個開運動作（如：調整錢包、投資標的建議）。
+    3. 【玄學轉運建議】：結合總資產狀況，給予 3 個開運動作。
     
-    語氣神祕且溫馨，使用 Markdown 格式，繁體中文。
+    語氣神祕且溫馨，繁體中文。
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
     return response.text || "占卜球目前一片空白。";
   } catch (error: any) {
     console.error("Fortune AI Error Detail:", error);
-    return "🔮 占卜失敗：目前無法連線至星象儀。請檢查 API 金鑰設定或網路狀態。";
+    const errorMsg = error?.message || String(error);
+    return `🔮 占卜失敗，詳細原因：\n${errorMsg}\n\n(提示：請確認您的 API 金鑰是否有效且已啟用 Generative Language API)`;
   }
 };
