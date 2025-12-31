@@ -2,34 +2,25 @@ import { GoogleGenAI } from "@google/genai";
 import { Transaction, Category, BankAccount, TransactionType, User } from "../types";
 
 /**
- * 安全取得環境變數中的 API Key
+ * 處理 API 錯誤並回傳易讀的 Markdown 訊息
  */
-const getSafeApiKey = () => {
-  const key = process.env.API_KEY;
-  // 檢查是否為空字串、undefined 或 null 字符串
-  if (!key || key === "undefined" || key === "" || key === "null") {
-    return null;
-  }
-  return key;
-};
-
 const handleApiError = (error: any) => {
   console.error("Gemini API Error:", error);
   const msg = error.message || "";
   
   if (msg.includes("leaked")) {
-    return `### 🔐 安全警告：API 金鑰已洩漏\n\n系統偵測到您的金鑰已在公開環境流出。為了保護您的帳戶，Google 已自動停用此金鑰。\n\n**解決步驟：**\n1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey) 刪除舊金鑰並產生「新金鑰」。\n2. **切記：不要將金鑰寫在程式碼中**。\n3. 將新金鑰填入 GitHub 專案的 **Settings > Secrets > API_KEY**。`;
+    return `### 🔐 安全警告：API 金鑰已洩漏\n\n偵測到您的金鑰曾在公開環境流出。為了保護帳戶，Google 已停用此金鑰。\n\n**修復方式：**\n1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey) 刪除舊金鑰並產生「新金鑰」。\n2. **請勿**在程式碼中貼上金鑰。\n3. 將新金鑰填入 GitHub 專案的 **Settings > Secrets > API_KEY**。`;
   }
   
   if (msg.includes("403") || msg.includes("PERMISSION_DENIED")) {
-    return `### 🚫 存取受拒 (403)\n\n目前無法連接到 AI 服務。請確認 API 金鑰是否正確填入 GitHub Secrets。`;
+    return `### 🚫 存取受拒 (403)\n\n無法連接 AI 服務。請檢查 GitHub Secrets 中的 \`API_KEY\` 是否正確且已啟用。`;
   }
 
   if (msg.includes("429") || msg.includes("quota")) {
-    return `### 📊 流量達到上限 (429)\n\n免費版 API 每分鐘有調用次數限制。請稍候 60 秒後再試。`;
+    return `### 📊 流量限制 (429)\n\n免費版 API 已達上限。請等待 60 秒後重試。`;
   }
 
-  return `### ⚠️ 分析暫時中斷\n\n系統訊息：${msg || "網路連線異常"}\n\n建議：請檢查網路或稍後重試。`;
+  return `### ⚠️ 分析暫時無法完成\n\n系統訊息：${msg || "網路連線異常"}`;
 };
 
 export const getFinancialAdvice = async (
@@ -37,10 +28,10 @@ export const getFinancialAdvice = async (
   categories: Category[],
   accounts: BankAccount[]
 ) => {
-  const apiKey = getSafeApiKey();
-  if (!apiKey) return "### 🔑 尚未設定 API 金鑰\n\n請在專案的環境變數或 GitHub Secrets 中設定 `API_KEY` 以啟用 AI 理財診斷功能。";
+  if (!process.env.API_KEY) return "### 🔑 尚未偵測到 API 金鑰\n\n請在專案環境變數中設定 `API_KEY`。";
 
-  const ai = new GoogleGenAI({ apiKey });
+  // 每次調用時建立新實例以確保使用最新密鑰
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
   const totalIncome = transactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + t.amount, 0);
@@ -65,7 +56,7 @@ export const getFinancialAdvice = async (
   1. 【資產健康度評估】
   2. 【消費習慣警示】
   3. 【下個月的理財具體目標建議】
-  請使用繁體中文，口吻要專業、條理清晰。`;
+  請使用繁體中文，口吻專業。`;
 
   try {
     const response = await ai.models.generateContent({
@@ -79,33 +70,30 @@ export const getFinancialAdvice = async (
 };
 
 export const getFortuneAdvice = async (user: User, totalBalance: number) => {
-  if (!user.birthday) return "### 🔮 缺少資訊\n\n請先輸入您的出生日期，占卜球才能連結您的財富星圖。";
+  if (!user.birthday) return "### 🔮 缺少資訊\n\n請輸入出生日期以啟動占卜球。";
+  if (!process.env.API_KEY) return "### 🔑 API 未就緒\n\n請設定 `API_KEY`。";
 
-  const apiKey = getSafeApiKey();
-  if (!apiKey) return "### 🔑 API 未就緒\n\n占卜球需要 `API_KEY` 才能看透財運，請確認環境設定。";
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  const ai = new GoogleGenAI({ apiKey });
-
-  const prompt = `你是一位融合「西方占星」與「現代金融數據」的神祕學理財大師。
+  const prompt = `你是一位神祕學理財大師。
   用戶資訊：
   - 姓名：${user.name}
   - 星座：${user.zodiac}
   - 生肖：${user.chineseZodiac}
   - 存款：$${totalBalance.toLocaleString()}
   
-  請根據今日星象生成 Markdown 格式的「財運報告」：
-  - 【今日財運指數】(給予 1-100 分)
+  請根據今日星象生成 Markdown 財運報告：
+  - 【今日財運指數】(1-100)
   - 【理財吉方位與幸運色】
-  - 【玄學理財建議】(例如：今天適合簽約嗎？適合買入嗎？)
-  - 【性格盲點警示】
-  請使用繁體中文，風格要神祕、有趣且具啟發性。`;
+  - 【玄學建議與盲點警示】
+  請使用繁體中文，神祕且有趣。`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
-    return response.text || "占卜球目前一片迷霧，請稍候重試。";
+    return response.text || "占卜球目前一片迷霧。";
   } catch (error: any) {
     return handleApiError(error);
   }
