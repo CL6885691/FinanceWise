@@ -2,10 +2,11 @@ import { GoogleGenAI } from "@google/genai";
 import { Transaction, Category, BankAccount, TransactionType, User } from "../types";
 
 /**
- * 取得 API Key 的安全封裝
+ * 安全取得環境變數中的 API Key
  */
 const getSafeApiKey = () => {
   const key = process.env.API_KEY;
+  // 檢查是否為空字串、undefined 或 null 字符串
   if (!key || key === "undefined" || key === "" || key === "null") {
     return null;
   }
@@ -13,22 +14,22 @@ const getSafeApiKey = () => {
 };
 
 const handleApiError = (error: any) => {
-  console.error("Gemini API Error Detail:", error);
+  console.error("Gemini API Error:", error);
   const msg = error.message || "";
   
   if (msg.includes("leaked")) {
-    return `### 🔐 安全性封鎖：金鑰已洩漏\n\n偵測到此 API 金鑰曾在網路公開。請執行以下步驟：\n1. 到 [AI Studio](https://aistudio.google.com/app/apikey) 刪除舊金鑰並產生**新金鑰**。\n2. **絕對不要**將金鑰寫在程式碼裡。\n3. 將新金鑰填入 GitHub 專案的 **Settings > Secrets > API_KEY**。`;
+    return `### 🔐 安全警告：API 金鑰已洩漏\n\n系統偵測到您的金鑰已在公開環境流出。為了保護您的帳戶，Google 已自動停用此金鑰。\n\n**解決步驟：**\n1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey) 刪除舊金鑰並產生「新金鑰」。\n2. **切記：不要將金鑰寫在程式碼中**。\n3. 將新金鑰填入 GitHub 專案的 **Settings > Secrets > API_KEY**。`;
   }
   
   if (msg.includes("403") || msg.includes("PERMISSION_DENIED")) {
-    return `### 🚫 存取受限 (403)\n\n請確認您的 API 金鑰是否有效，且已在 Google Cloud 中啟用了 Generative Language API。`;
+    return `### 🚫 存取受拒 (403)\n\n目前無法連接到 AI 服務。請確認 API 金鑰是否正確填入 GitHub Secrets。`;
   }
 
   if (msg.includes("429") || msg.includes("quota")) {
-    return `### 📊 配額已滿 (429)\n\n目前 API 使用量已達到免費版上限，請稍候再試，或檢查 Google AI Studio 中的 Quota 設定。`;
+    return `### 📊 流量達到上限 (429)\n\n免費版 API 每分鐘有調用次數限制。請稍候 60 秒後再試。`;
   }
 
-  return `### ⚠️ 分析暫時無法完成\n\n原因：${msg || "網路連線不穩定"}\n\n請稍後再試。`;
+  return `### ⚠️ 分析暫時中斷\n\n系統訊息：${msg || "網路連線異常"}\n\n建議：請檢查網路或稍後重試。`;
 };
 
 export const getFinancialAdvice = async (
@@ -37,7 +38,7 @@ export const getFinancialAdvice = async (
   accounts: BankAccount[]
 ) => {
   const apiKey = getSafeApiKey();
-  if (!apiKey) return "❌ 系統偵測不到 API 金鑰。請檢查環境變數設定。";
+  if (!apiKey) return "### 🔑 尚未設定 API 金鑰\n\n請在專案的環境變數或 GitHub Secrets 中設定 `API_KEY` 以啟用 AI 理財診斷功能。";
 
   const ai = new GoogleGenAI({ apiKey });
   
@@ -52,58 +53,59 @@ export const getFinancialAdvice = async (
     }))
     .filter(item => item.amount > 0);
 
-  const prompt = `你是一位擁有 20 年經驗的資深理財顧問。
-  請針對以下財務數據進行專業診斷：
-  - 目前總資產：$${totalBalance.toLocaleString()}
-  - 本月總收入：$${totalIncome.toLocaleString()}
-  - 本月總支出：$${totalExpense.toLocaleString()}
-  - 支出分佈：${JSON.stringify(expenseByCategory)}
+  const prompt = `你是一位專業的個人理財 AI。
+  分析對象：${accounts.length} 個帳戶。
+  財務概況：
+  - 總資產：$${totalBalance.toLocaleString()}
+  - 本月收入：$${totalIncome.toLocaleString()}
+  - 本月支出：$${totalExpense.toLocaleString()}
+  - 詳細支出分佈：${JSON.stringify(expenseByCategory)}
   
-  請提供一份 Markdown 格式的財務報告，包含：
-  1. 【資產健康評分】(0-100)
-  2. 【支出警示】分析哪些項目花費過多。
-  3. 【增長策略】根據餘額給予投資或儲蓄建議。
-  使用繁體中文，口吻要專業且具鼓勵性。`;
+  請生成一份 Markdown 格式的專業分析報告：
+  1. 【資產健康度評估】
+  2. 【消費習慣警示】
+  3. 【下個月的理財具體目標建議】
+  請使用繁體中文，口吻要專業、條理清晰。`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
-    return response.text || "AI 診斷完成，但未產生文字內容。";
+    return response.text || "AI 忙碌中，請稍後再試。";
   } catch (error: any) {
     return handleApiError(error);
   }
 };
 
 export const getFortuneAdvice = async (user: User, totalBalance: number) => {
-  if (!user.birthday) return "🔮 占卜球需要您的生日才能運作。";
+  if (!user.birthday) return "### 🔮 缺少資訊\n\n請先輸入您的出生日期，占卜球才能連結您的財富星圖。";
 
   const apiKey = getSafeApiKey();
-  if (!apiKey) return "❌ 占卜球失效：找不到 API 金鑰。";
+  if (!apiKey) return "### 🔑 API 未就緒\n\n占卜球需要 `API_KEY` 才能看透財運，請確認環境設定。";
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const prompt = `你是一位融合「現代金融」與「東方易經」的命理大師。
-  使用者資訊：
+  const prompt = `你是一位融合「西方占星」與「現代金融數據」的神祕學理財大師。
+  用戶資訊：
   - 姓名：${user.name}
   - 星座：${user.zodiac}
   - 生肖：${user.chineseZodiac}
-  - 當前資產：$${totalBalance.toLocaleString()}
+  - 存款：$${totalBalance.toLocaleString()}
   
-  請生成一份 Markdown 格式的「今日財運命盤」：
-  - 【財運指數】(用五顆星表示)
-  - 【開運方位與顏色】
-  - 【理財盲點】結合性格給予警示。
-  - 【玄學建議】如何轉運。
-  口吻要神祕且有趣，使用繁體中文。`;
+  請根據今日星象生成 Markdown 格式的「財運報告」：
+  - 【今日財運指數】(給予 1-100 分)
+  - 【理財吉方位與幸運色】
+  - 【玄學理財建議】(例如：今天適合簽約嗎？適合買入嗎？)
+  - 【性格盲點警示】
+  請使用繁體中文，風格要神祕、有趣且具啟發性。`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
-    return response.text || "占卜球目前一片混濁，請稍後再試。";
+    return response.text || "占卜球目前一片迷霧，請稍候重試。";
   } catch (error: any) {
     return handleApiError(error);
   }
